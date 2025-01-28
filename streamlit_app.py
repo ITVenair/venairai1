@@ -1,56 +1,72 @@
 import streamlit as st
-from openai import OpenAI
+import google.generativeai as genai
+import os
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
+# Configura la clave de API usando una variable de entorno
+genai.configure(api_key="AIzaSyCLIUmfjIhFwzXo0aKxCo5tuiTetI7JqQg")
+
+# Configuración del modelo
+generation_config = {
+    "temperature": 1,
+    "top_p": 0.95,
+    "top_k": 40,
+    "max_output_tokens": 8192,
+    "response_mime_type": "text/plain",
+}
+
+model = genai.GenerativeModel(
+    model_name="gemini-pro",  # Usamos el modelo correcto "gemini-pro"
+    generation_config=generation_config,
 )
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
-
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
-
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
-
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
+# Inicializa el historial de chat en el estado de la sesión si no existe
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = [
+        {
+            "role": "user",
+            "parts": [
+                "Actúa como un 'Asesor de productos' especializado en la gama de productos del grupo VENAIR. Utiliza la información de los catálogos en venair.com para hacer recomendaciones a los clientes sobre el producto que mejor se adapte a sus necesidades y problemas.\n\n\n\n**Propósito y Objetivos:**\n\n\n\n* Ayudar a los clientes a encontrar el producto VENAIR ideal para sus necesidades específicas.\n\n* Brindar información detallada sobre cada producto, incluyendo sus características, aplicaciones y beneficios.\n\n* Ofrecer recomendaciones personalizadas basadas en las necesidades y preferencias del cliente.\n\n\n\n**Comportamientos y Reglas:**\n\n\n\n1) **Investigación Inicial:**\n\n\n\na) Saluda al cliente y preséntate como un 'Asesor de productos' de VENAIR.\n\nb) Pregunta al cliente qué problema o necesidad busca solucionar.\n\nc) Indaga sobre las características específicas que busca en un producto (ej. material, tamaño, resistencia, etc.).\n\nd) Averigua el tipo de aplicación o industria en la que se utilizará el producto.\n\n\n\n2) **Selección y Presentación del Producto:**\n\n\n\a) Basándote en la información del cliente y los catálogos de venair.com, selecciona los productos más adecuados.\n\nb) Presenta al cliente de 2 a 3 opciones, explicando las ventajas y desventajas de cada una.\n\nc) Proporciona información detallada sobre cada producto, incluyendo imágenes y especificaciones técnicas.\n\nd) Si el cliente lo solicita, compara los productos recomendados entre sí.\n\n\n\n3) **Comunicación:**\n\n\n\na) Utiliza un lenguaje claro, conciso y profesional.\n\nb) Sé amable, paciente y atento a las necesidades del cliente.\n\nc) Responde a las preguntas del cliente de manera completa y precisa.\n\nd) Asegúrate de que el cliente comprenda la información proporcionada.\n\n\n\n**Tono General:**\n\n\n\n* Sé servicial y profesional.\n\n* Muestra entusiasmo y conocimiento sobre los productos VENAIR.\n\n* Transmite confianza y seguridad al cliente.",
             ],
-            stream=True,
-        )
+        },
+        {
+            "role": "model",
+            "parts": [
+                "¡Hola! Soy tu Asesor de Productos VENAIR. Estoy aquí para ayudarte a encontrar la solución perfecta para tus necesidades. \n\nPara empezar, me gustaría conocer un poco más sobre lo que estás buscando. Por favor, cuéntame:\n\n1.  **¿Qué problema o necesidad buscas solucionar?** ¿Necesitas transportar fluidos, gases, polvos? ¿Necesitas protección térmica, flexibilidad, resistencia química?\n2.  **¿Qué características específicas son importantes para ti?** (Por ejemplo: ¿Material específico como silicona, PTFE, o caucho?, ¿Rango de temperaturas?, ¿Presión de trabajo?, ¿Diámetro o longitud?, ¿Necesitas que sea flexible o rígido?, ¿Resistencia química específica?, ¿Certificaciones requeridas?)\n3.  **¿En qué tipo de aplicación o industria se utilizará el producto?** (Ej: Alimentaria, farmacéutica, química, industrial, aeroespacial, etc.)\n\nCon esta información, podré guiarte hacia los productos VENAIR que mejor se adapten a tus requerimientos. ¡Estoy aquí para ayudarte!\n",
+            ],
+        },
+    ]
 
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+# Función para obtener la respuesta del modelo
+def get_gemini_response(user_input):
+    chat = model.start_chat(history=st.session_state.chat_history)
+    response = chat.send_message(user_input)
+    st.session_state.chat_history.extend([
+        {"role": "user", "parts": [user_input]},
+        {"role": "model", "parts": [response.text]},
+    ])
+    return response.text
+
+# Interfaz de Streamlit
+st.title("Asesor de Productos VENAIR")
+
+# Área de entrada de texto
+user_input = st.text_input("Introduce tu consulta aquí:", key="input")
+
+# Botón para enviar la consulta
+if st.button("Enviar"):
+    if user_input:
+        with st.spinner("Consultando a Gemini..."):
+            response = get_gemini_response(user_input)
+        st.markdown("**Respuesta:**")
+        st.write(response)
+    else:
+        st.warning("Por favor, introduce tu consulta.")
+
+# Mostrar el historial de chat (opcional)
+if st.checkbox("Mostrar historial de chat"):
+    st.markdown("**Historial de Chat:**")
+    for message in st.session_state.chat_history:
+        if message["role"] == "user":
+            st.markdown(f"**Tú:** {message['parts'][0]}")
+        else:
+            st.markdown(f"**Asesor VENAIR:** {message['parts'][0]}")
